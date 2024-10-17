@@ -1,1 +1,18 @@
+int main(int argc, char* argv[]) {
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <pid>" << std::endl;
+        return -1;
+    }
 
+    pid_t pid = std::stoi(argv[1]);
+
+    if (ptrace(PTRACE_ATTACH, pid, nullptr, nullptr) == -1) {
+        std::cerr << "Error attaching to process: " << strerror(errno) << std::endl;
+        return -1;
+    }
+
+    Debugger debugger(pid);
+    debugger.run();
+
+    return 0;
+}
