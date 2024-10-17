@@ -28,3 +28,84 @@ private:
     bool m_enabled;     // Is the breakpoint enabled?
     long m_saved_data;  // The original instruction data
 };
+
+class Debugger {
+public:
+    Debugger(pid_t pid) : m_pid(pid) {}
+
+    void run() {
+        int wait_status;
+        waitpid(m_pid, &wait_status, 0);  // Wait for the process to stop initially
+
+        while (WIFSTOPPED(wait_status)) {
+            std::cout << "Debugger: Process stopped. Command: ";
+            std::string command;
+            std::cin >> command;
+
+            if (command == "continue") {
+                continue_execution();  // Continue the process
+            } else if (command == "regs") {
+                print_registers();     // Print CPU register values
+            } else if (command == "step") {
+                single_step();         // Step through one instruction
+            } else if (command == "break") {
+                std::cout << "Enter breakpoint address (in hex): ";
+                unsigned long addr;
+                std::cin >> std::hex >> addr;
+                set_breakpoint((void*)addr);  // Set a breakpoint
+            } else if (command == "detach") {
+                detach();              // Detach from the process
+                break;
+            }
+
+            waitpid(m_pid, &wait_status, 0);  // Wait for the process to stop again
+        }
+    }
+
+private:
+    pid_t m_pid;                          // Process ID of the target process
+    std::vector<Breakpoint> m_breakpoints;  // List of breakpoints
+
+    // Function to continue the execution of the process
+    void continue_execution() {
+        ptrace(PTRACE_CONT, m_pid, nullptr, nullptr);  // Continue execution
+    }
+
+    // Function to perform a single step (execute one instruction)
+    void single_step() {
+        ptrace(PTRACE_SINGLESTEP, m_pid, nullptr, nullptr);  // Single step
+    }
+
+    // Function to print CPU register values
+    void print_registers() {
+        struct user_regs_struct regs;
+        ptrace(PTRACE_GETREGS, m_pid, nullptr, &regs);  // Get the CPU registers
+
+        std::cout << "RIP: " << std::hex << regs.rip << std::endl;
+        std::cout << "RAX: " << std::hex << regs.rax << std::endl;
+        std::cout << "RBX: " << std::hex << regs.rbx << std::endl;
+        std::cout << "RCX: " << std::hex << regs.rcx << std::endl;
+        std::cout << "RDX: " << std::hex << regs.rdx << std::endl;
+        std::cout << "RSI: " << std::hex << regs.rsi << std::endl;
+        std::cout << "RDI: " << std::hex << regs.rdi << std::endl;
+        std::cout << "RSP: " << std::hex << regs.rsp << std::endl;
+        std::cout << "RBP: " << std::hex << regs.rbp << std::endl;
+    }
+
+    // Function to set a breakpoint at a specific address
+    void set_breakpoint(void* addr) {
+        Breakpoint bp(m_pid, addr);
+        bp.enable();  // Enable the breakpoint
+        m_breakpoints.push_back(bp);
+    }
+
+    // Function to detach from the process
+    void detach() {
+        for (auto& bp : m_breakpoints) {
+            if (bp.is_enabled()) {
+                bp.disable();  // Disable all breakpoints before detaching
+            }
+        }
+        ptrace(PTRACE_DETACH, m_pid, nullptr, nullptr);  // Detach the debugger
+    }
+};
